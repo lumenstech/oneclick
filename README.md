@@ -72,7 +72,7 @@ Machine-readable JSON:
 ./oneclick preflight .
 ```
 
-The preflight reports host CPU, RAM, disk, architecture, Docker availability, and NVIDIA GPU/VRAM when `nvidia-smi` is available. V0.1 intentionally does not invent precise GPU requirements from source code; it reports GPU signals and warnings. CPU, RAM, and disk requirements are heuristic planning values derived from repository signals, not benchmarked sizing.
+The preflight reports host CPU, RAM, disk, architecture, Docker availability, and NVIDIA GPU/VRAM when `nvidia-smi` is available. V0.1 intentionally does not invent precise GPU requirements from source code; it reports GPU signals and warnings. CPU, RAM, and disk requirements are heuristic planning values derived from repository signals, not benchmarked sizing. V0.1 deployment preflight is Linux-host-only; the analyzer itself cross-compiles for Linux, macOS, and Windows.
 
 ## Deploy
 
@@ -94,7 +94,7 @@ For a Dockerfile with one detected `EXPOSE` port, `--port` changes the host-side
 
 ## OneClick manifest
 
-`analyze` emits the normalized fields described by [`schema/oneclick.schema.json`](schema/oneclick.schema.json). Repositories may later carry a hand-authored `oneclick.json`; V0.1 treats generated analysis as the source of truth and does not yet consume overrides.
+`analyze` emits the normalized fields described by [`schema/oneclick.schema.json`](schema/oneclick.schema.json), including a deterministic `plan_hash`. Local Git repositories also report whether the working tree is dirty; `deploy` refuses dirty Git trees so a `HEAD` SHA cannot be mistaken for the exact source being executed. Repositories may later carry a hand-authored `oneclick.json`; V0.1 treats generated analysis as the source of truth and does not yet consume overrides.
 
 ## Agent Plugin
 
