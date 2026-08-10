@@ -1,0 +1,38 @@
+[Unit]
+Description=OneClick outbound deployment node
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=oneclick-node
+Group=oneclick-node
+SupplementaryGroups=docker
+UMask=0077
+EnvironmentFile=-/etc/oneclick-node.env
+StateDirectory=oneclick-node
+StateDirectoryMode=0700
+ExecStart=/usr/local/bin/oneclick-node
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectHostname=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target
