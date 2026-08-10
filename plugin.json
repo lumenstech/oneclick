@@ -1,0 +1,12 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "oneclick",
+  "version": "0.1.0",
+  "description": "Analyze a Git repository, generate a local deployment plan, preflight hardware, and deploy supported Docker workloads onto infrastructure the user controls.",
+  "author": {
+    "name": "Lumens Technologies",
+    "url": "https://deploylocal.com"
+  },
+  "homepage": "https://deploylocal.com",
+  "repository": "https://github.com/lumenstech/oneclick"
+}

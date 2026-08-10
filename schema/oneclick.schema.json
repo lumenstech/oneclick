@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://deploylocal.com/schemas/oneclick-v1.json",
+  "title": "OneClick Deployment Plan v1",
+  "type": "object",
+  "required": [
+    "version",
+    "plan_hash",
+    "app",
+    "source",
+    "runtime",
+    "requirements",
+    "deployment"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "app": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "source": {
+      "type": "object",
+      "required": [
+        "type",
+        "ref"
+      ],
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "dirty": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "runtime": {
+      "type": "object",
+      "required": [
+        "primary",
+        "detected",
+        "executor",
+        "deployable"
+      ],
+      "properties": {
+        "primary": {
+          "type": "string"
+        },
+        "detected": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "executor": {
+          "enum": [
+            "docker-compose",
+            "docker",
+            "unsupported"
+          ]
+        },
+        "deployable": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "requirements": {
+      "type": "object",
+      "required": [
+        "cpu_cores_min",
+        "memory_mb_min",
+        "disk_mb_min",
+        "gpu_required"
+      ],
+      "properties": {
+        "cpu_cores_min": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "memory_mb_min": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "disk_mb_min": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "gpu_required": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "services": {
+      "type": "array"
+    },
+    "ports": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 65535
+      },
+      "uniqueItems": true
+    },
+    "secrets": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "health": {
+      "type": "object"
+    },
+    "deployment": {
+      "type": "object",
+      "required": [
+        "rollback_supported"
+      ],
+      "properties": {
+        "rollback_supported": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "plan_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "additionalProperties": false
+}
