@@ -26,29 +26,36 @@ var composeRawForbiddenKeys = map[string]string{
 	"use_api_socket":  "use_api_socket exposes the container engine API socket",
 }
 
-func validateCompose(root string, env []string) error {
+func validateCompose(root, project string, env []string) (string, error) {
 	path, err := composeFile(root)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if err := scanComposeSource(path); err != nil {
-		return err
+		return "", err
 	}
-	out, err := composeConfig(root, env)
+	file := filepath.Base(path)
+	out, err := composeConfig(root, file, project, env)
 	if err != nil {
-		return err
+		return "", err
 	}
 	var model any
 	if err := json.Unmarshal(out, &model); err != nil {
-		return fmt.Errorf("docker compose config returned invalid JSON: %w", err)
+		return "", fmt.Errorf("docker compose config returned invalid JSON: %w", err)
 	}
-	return validateComposeModel(model, "$")
+	if err := validateComposeModel(model, "$", project); err != nil {
+		return "", err
+	}
+	return file, nil
 }
 
 func composeFile(root string) (string, error) {
 	for _, name := range []string{"compose.yaml", "compose.yml", "docker-compose.yml", "docker-compose.yaml"} {
 		path := filepath.Join(root, name)
-		if st, err := os.Stat(path); err == nil && !st.IsDir() {
+		if st, err := os.Lstat(path); err == nil && !st.IsDir() {
+			if st.Mode()&os.ModeSymlink != 0 {
+				return "", fmt.Errorf("Compose file must not be a symlink: %s", name)
+			}
 			return path, nil
 		}
 	}
@@ -112,8 +119,8 @@ func stripComposeComment(line string) string {
 	return line
 }
 
-func composeConfig(root string, env []string) ([]byte, error) {
-	args := []string{"compose", "config", "--format", "json", "--no-env-resolution", "--no-interpolate", "--no-path-resolution"}
+func composeConfig(root, file, project string, env []string) ([]byte, error) {
+	args := []string{"compose", "-p", project, "-f", file, "config", "--format", "json", "--no-env-resolution", "--no-interpolate", "--no-path-resolution"}
 	cmd := exec.Command("docker", args...)
 	cmd.Dir = root
 	cmd.Env = env
@@ -124,7 +131,7 @@ func composeConfig(root string, env []string) ([]byte, error) {
 	return out, nil
 }
 
-func validateComposeModel(v any, path string) error {
+func validateComposeModel(v any, path, project string) error {
 	switch x := v.(type) {
 	case map[string]any:
 		if typ, _ := x["type"].(string); strings.EqualFold(typ, "bind") {
@@ -178,14 +185,24 @@ func validateComposeModel(v any, path string) error {
 				if nonEmpty(child) && !strings.Contains(path, ".deploy.resources.reservations") {
 					return fmt.Errorf("unsafe Compose configuration at %s: direct host device access is not permitted", childPath)
 				}
+			case "external":
+				if b, ok := child.(bool); ok && b && (strings.HasPrefix(path, "$.volumes.") || strings.HasPrefix(path, "$.networks.")) {
+					return fmt.Errorf("unsafe Compose configuration at %s: external volumes/networks are not permitted", childPath)
+				}
+			case "name":
+				if s, ok := child.(string); ok && s != "" && (strings.HasPrefix(path, "$.volumes.") || strings.HasPrefix(path, "$.networks.")) {
+					if !strings.HasPrefix(s, project+"_") {
+						return fmt.Errorf("unsafe Compose configuration at %s: resource name escapes the OneClick project namespace", childPath)
+					}
+				}
 			}
-			if err := validateComposeModel(child, childPath); err != nil {
+			if err := validateComposeModel(child, childPath, project); err != nil {
 				return err
 			}
 		}
 	case []any:
 		for i, child := range x {
-			if err := validateComposeModel(child, fmt.Sprintf("%s[%d]", path, i)); err != nil {
+			if err := validateComposeModel(child, fmt.Sprintf("%s[%d]", path, i), project); err != nil {
 				return err
 			}
 		}
