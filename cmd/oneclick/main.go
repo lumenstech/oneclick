@@ -106,8 +106,8 @@ func deployCmd(args []string) {
 	}
 }
 
-func addPlanIdentityFlags(fs *flag.FlagSet) planIdentityFlags {
-	var out planIdentityFlags
+func addPlanIdentityFlags(fs *flag.FlagSet) *planIdentityFlags {
+	out := &planIdentityFlags{}
 	fs.StringVar(&out.SourceRef, "source-ref", "", "canonical logical source reference used for plan hashing")
 	fs.StringVar(&out.SourceType, "source-type", "", "logical source type override: github or local")
 	fs.StringVar(&out.SourceRevision, "source-revision", "", "immutable logical source revision used for plan hashing")
@@ -115,7 +115,7 @@ func addPlanIdentityFlags(fs *flag.FlagSet) planIdentityFlags {
 	return out
 }
 
-func preparePlan(src string, identity planIdentityFlags) (source.Checkout, analyzer.Plan) {
+func preparePlan(src string, identity *planIdentityFlags) (source.Checkout, analyzer.Plan) {
 	c, err := source.Prepare(src)
 	if err != nil {
 		fatal(err)
