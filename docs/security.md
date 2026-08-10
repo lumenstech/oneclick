@@ -9,6 +9,7 @@
 - The execution engine supports only Docker Compose and Dockerfile paths.
 - OneClick does not execute `package.json` scripts, Makefiles, shell scripts, README commands, or arbitrary detected install commands.
 - `deploy` requires `--yes`.
+- Local Git deployment refuses a dirty working tree; commit or stash changes first. Analysis may inspect a dirty tree, but marks it explicitly and warns that `HEAD` does not bind those modifications.
 - Commands are invoked with `exec.Command`; repository-derived strings are not concatenated into a shell command.
 - No GitHub Actions are required.
 - No inbound management port is opened.
