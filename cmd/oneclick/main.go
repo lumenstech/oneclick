@@ -75,7 +75,7 @@ func preflightCmd(args []string) {
 func deployCmd(args []string) {
 	fs := flag.NewFlagSet("deploy", flag.ExitOnError)
 	yes := fs.Bool("yes", false, "confirm deployment")
-	port := fs.Int("port", 0, "host/container port for Dockerfile executor")
+	port := fs.Int("port", 0, "host port for Dockerfile executor; maps to the sole detected container port when available")
 	src, parseArgs := splitLeadingSource(args)
 	_ = fs.Parse(parseArgs)
 	if fs.NArg() > 0 {
