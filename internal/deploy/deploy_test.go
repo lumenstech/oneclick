@@ -26,21 +26,74 @@ func TestFailsClosedForUnsupportedExecutor(t *testing.T) {
 	}
 }
 
-func TestComposeExecutorCommand(t *testing.T) {
+func TestComposeExecutorRunsConfigSafetyCheckBeforeUp(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fake docker shell harness is POSIX-only")
 	}
-	log := installFakeDocker(t)
-	p := analyzer.Plan{
-		App:     analyzer.App{Name: "demo"},
-		Runtime: analyzer.Runtime{Deployable: true, Executor: "docker-compose"},
-	}
-	if err := Run(p, t.TempDir(), Options{Confirm: true}); err != nil {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "compose.yaml"), []byte("services:\n  web:\n    image: nginx\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	got := readLog(t, log)
-	if got != "compose up -d --build" {
-		t.Fatalf("docker args=%q", got)
+	log := installFakeDocker(t, `{"services":{"web":{"image":"nginx"}}}`)
+	p := analyzer.Plan{
+		App:     analyzer.App{Name: "demo"},
+		Source:  analyzer.Source{Type: "github", Ref: "https://github.com/acme/demo", Revision: "abc123"},
+		Runtime: analyzer.Runtime{Deployable: true, Executor: "docker-compose"},
+	}
+	if err := Run(p, root, Options{Confirm: true}); err != nil {
+		t.Fatal(err)
+	}
+	calls := strings.Split(readLog(t, log), "\n")
+	if len(calls) != 2 {
+		t.Fatalf("docker calls=%#v", calls)
+	}
+	project := composeProjectName(p)
+	wantConfig := "compose -p " + project + " -f compose.yaml config --format json --no-env-resolution --no-interpolate --no-path-resolution"
+	if calls[0] != wantConfig {
+		t.Fatalf("config call=%q want=%q", calls[0], wantConfig)
+	}
+	wantUp := "compose -p " + project + " -f compose.yaml up -d --build"
+	if calls[1] != wantUp {
+		t.Fatalf("up call=%q want=%q", calls[1], wantUp)
+	}
+}
+
+func TestComposeRejectsPrivilegedCanonicalModelBeforeUp(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake docker shell harness is POSIX-only")
+	}
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "compose.yaml"), []byte("services:\n  web:\n    image: nginx\n    privileged: true\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	log := installFakeDocker(t, `{"services":{"web":{"image":"nginx","privileged":true}}}`)
+	p := analyzer.Plan{App: analyzer.App{Name: "demo"}, Runtime: analyzer.Runtime{Deployable: true, Executor: "docker-compose"}}
+	err := Run(p, root, Options{Confirm: true})
+	if err == nil || !strings.Contains(err.Error(), "privileged") {
+		t.Fatalf("expected privileged rejection, got %v", err)
+	}
+	calls := strings.Split(readLog(t, log), "\n")
+	if len(calls) != 1 || !strings.Contains(calls[0], " config ") {
+		t.Fatalf("unsafe compose progressed beyond config: %#v", calls)
+	}
+}
+
+func TestComposeRejectsProviderBeforeDockerIsInvoked(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake docker shell harness is POSIX-only")
+	}
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "compose.yaml"), []byte("services:\n  database:\n    provider:\n      type: hostile-helper\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	log := installFakeDocker(t, `{"services":{}}`)
+	p := analyzer.Plan{App: analyzer.App{Name: "demo"}, Runtime: analyzer.Runtime{Deployable: true, Executor: "docker-compose"}}
+	err := Run(p, root, Options{Confirm: true})
+	if err == nil || !strings.Contains(err.Error(), "provider") {
+		t.Fatalf("expected provider rejection, got %v", err)
+	}
+	if _, statErr := os.Stat(log); !os.IsNotExist(statErr) {
+		t.Fatalf("docker should not be invoked for raw provider rejection; stat=%v", statErr)
 	}
 }
 
@@ -48,7 +101,7 @@ func TestDockerExecutorPreservesContainerPort(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fake docker shell harness is POSIX-only")
 	}
-	log := installFakeDocker(t)
+	log := installFakeDocker(t, `{}`)
 	p := analyzer.Plan{
 		App:     analyzer.App{Name: "demo"},
 		Source:  analyzer.Source{Type: "github", Ref: "https://github.com/example/demo", Revision: "abc123"},
@@ -69,21 +122,25 @@ func TestDockerExecutorPreservesContainerPort(t *testing.T) {
 	if got[1] != "rm -f oneclick-demo" {
 		t.Fatalf("rm call=%q", got[1])
 	}
+	if !strings.Contains(got[2], "--security-opt no-new-privileges:true") {
+		t.Fatalf("run safety options missing: %q", got[2])
+	}
 	if !strings.Contains(got[2], "-p 3000:8000") {
 		t.Fatalf("run call=%q", got[2])
 	}
 }
 
-func installFakeDocker(t *testing.T) string {
+func installFakeDocker(t *testing.T, configJSON string) string {
 	t.Helper()
 	bin := t.TempDir()
 	log := filepath.Join(t.TempDir(), "docker.log")
 	script := filepath.Join(bin, "docker")
-	body := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$ONECLICK_DOCKER_LOG\"\n"
+	body := "#!/bin/sh\n" +
+		"printf '%s\\n' \"$*\" >> '" + log + "'\n" +
+		"if [ \"$1\" = compose ] && echo \"$*\" | grep -q ' config '; then printf '%s\\n' '" + configJSON + "'; fi\n"
 	if err := os.WriteFile(script, []byte(body), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("ONECLICK_DOCKER_LOG", log)
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	return log
 }
