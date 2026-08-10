@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/lumenstech/oneclick/internal/analyzer"
 )
@@ -35,10 +34,7 @@ type Result struct {
 func Inspect(path string) Host {
 	h := Host{OS: runtime.GOOS, Architecture: runtime.GOARCH, CPUCores: runtime.NumCPU()}
 	h.MemoryMB = linuxMemoryMB()
-	var st syscall.Statfs_t
-	if err := syscall.Statfs(path, &st); err == nil {
-		h.DiskFreeMB = st.Bavail * uint64(st.Bsize) / (1024 * 1024)
-	}
+	h.DiskFreeMB = freeDiskMB(path)
 	_, err := exec.LookPath("docker")
 	h.Docker = err == nil
 	if out, err := exec.Command("nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits").Output(); err == nil {
@@ -56,6 +52,10 @@ func Inspect(path string) Host {
 func Check(plan analyzer.Plan, path string) Result {
 	h := Inspect(path)
 	r := Result{Host: h, Fits: true}
+	if runtime.GOOS != "linux" {
+		r.Fits = false
+		r.Problems = append(r.Problems, "V0.1 deployment preflight currently supports Linux Docker hosts only")
+	}
 	if h.CPUCores < plan.Requirements.CPUCoresMin {
 		r.Fits = false
 		r.Problems = append(r.Problems, fmt.Sprintf("CPU cores: need at least %d, found %d", plan.Requirements.CPUCoresMin, h.CPUCores))
