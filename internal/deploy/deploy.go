@@ -36,12 +36,18 @@ func Run(plan analyzer.Plan, root string, opts Options) error {
 		container := "oneclick-" + plan.App.Name
 		_ = exec.Command("docker", "rm", "-f", container).Run()
 		args := []string{"run", "-d", "--name", container, "--restart", "unless-stopped"}
-		port := opts.Port
-		if port == 0 && len(plan.Ports) == 1 {
-			port = plan.Ports[0]
+		hostPort := opts.Port
+		containerPort := 0
+		if len(plan.Ports) == 1 {
+			containerPort = plan.Ports[0]
 		}
-		if port > 0 {
-			args = append(args, "-p", strconv.Itoa(port)+":"+strconv.Itoa(port))
+		if hostPort == 0 {
+			hostPort = containerPort
+		}
+		if hostPort > 0 && containerPort > 0 {
+			args = append(args, "-p", strconv.Itoa(hostPort)+":"+strconv.Itoa(containerPort))
+		} else if hostPort > 0 {
+			args = append(args, "-p", strconv.Itoa(hostPort)+":"+strconv.Itoa(hostPort))
 		}
 		args = append(args, name)
 		return run(root, "docker", args...)
