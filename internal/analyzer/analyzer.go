@@ -15,18 +15,18 @@ import (
 )
 
 type Plan struct {
-	Version       int          `json:"version"`
-	App           App          `json:"app"`
-	Source        Source       `json:"source"`
-	Runtime       Runtime      `json:"runtime"`
+	Version      int          `json:"version"`
+	App          App          `json:"app"`
+	Source       Source       `json:"source"`
+	Runtime      Runtime      `json:"runtime"`
 	Requirements Requirements `json:"requirements"`
-	Services      []Service    `json:"services"`
-	Ports         []int        `json:"ports"`
-	Secrets       []string     `json:"secrets"`
-	Health        Health       `json:"health"`
-	Deployment    Deployment   `json:"deployment"`
-	Evidence      []string     `json:"evidence"`
-	Warnings      []string     `json:"warnings"`
+	Services     []Service    `json:"services"`
+	Ports        []int        `json:"ports"`
+	Secrets      []string     `json:"secrets"`
+	Health       Health       `json:"health"`
+	Deployment   Deployment   `json:"deployment"`
+	Evidence     []string     `json:"evidence"`
+	Warnings     []string     `json:"warnings"`
 }
 
 type App struct {
@@ -159,13 +159,7 @@ func Analyze(root, sourceRef, sourceType, revision string) (Plan, error) {
 	plan.Ports = detectPorts(root)
 	plan.Secrets = detectSecretNames(root)
 	plan.Services = detectServices(root, runtimes)
-	if len(plan.Ports) > 0 {
-		plan.Health.Port = plan.Ports[0]
-	}
-	if containsAny(root, []string{"/healthz", "/health", "healthcheck"}) {
-		plan.Health.Path = "/health"
-	}
-
+	plan.Warnings = append(plan.Warnings, "hardware requirements are V0.1 heuristics derived from repository signals, not benchmarked sizing")
 	plan.Evidence = uniqueSorted(plan.Evidence)
 	plan.Warnings = uniqueSorted(plan.Warnings)
 	return plan, nil
@@ -197,9 +191,12 @@ func scanSignals(root string, plan *Plan, add func(string, string)) {
 			for _, n := range ns {
 				if strings.Contains(s, n) {
 					add(runtime, rel+":"+n)
-					if runtime == "cuda" || runtime == "vllm" {
+					if runtime == "cuda" {
 						plan.Requirements.GPURequired = true
 						plan.Requirements.MemoryMBMin = max(plan.Requirements.MemoryMBMin, 8192)
+					}
+					if runtime == "vllm" {
+						plan.Warnings = append(plan.Warnings, "vLLM detected; accelerator requirements depend on the selected backend and model, so V0.1 only marks GPU required when CUDA/NVIDIA signals are also present")
 					}
 					if runtime == "ollama" {
 						plan.Requirements.MemoryMBMin = max(plan.Requirements.MemoryMBMin, 8192)
@@ -228,6 +225,7 @@ func detectPorts(root string) []int {
 			}
 		}
 	}
+	// Conservative text scan for common compose port mappings.
 	for _, name := range []string{"compose.yaml", "compose.yml", "docker-compose.yml", "docker-compose.yaml"} {
 		b, err := os.ReadFile(filepath.Join(root, name))
 		if err != nil {
@@ -306,38 +304,6 @@ func choosePrimary(runtimes []string) string {
 		}
 	}
 	return "unknown"
-}
-
-func containsAny(root string, needles []string) bool {
-	found := false
-	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if found {
-			return filepath.SkipAll
-		}
-		if err != nil || d.IsDir() {
-			if d != nil && d.IsDir() && shouldSkipDir(d.Name()) && path != root {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		rel, _ := filepath.Rel(root, path)
-		if !isScannable(rel) {
-			return nil
-		}
-		b, err := os.ReadFile(path)
-		if err != nil || len(b) > 1<<20 {
-			return nil
-		}
-		s := string(b)
-		for _, n := range needles {
-			if strings.Contains(s, n) {
-				found = true
-				break
-			}
-		}
-		return nil
-	})
-	return found
 }
 
 func isScannable(rel string) bool {
