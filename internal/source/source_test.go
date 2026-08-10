@@ -29,6 +29,20 @@ func TestPrepareLocalGitBindsRevision(t *testing.T) {
 	if len(c.Revision) != 40 {
 		t.Fatalf("expected commit SHA, got %q", c.Revision)
 	}
+	if c.Dirty {
+		t.Fatal("fresh commit should be clean")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "Dockerfile"), []byte("FROM alpine\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dirty, err := Prepare(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer dirty.Close()
+	if !dirty.Dirty {
+		t.Fatal("modified working tree should be marked dirty")
+	}
 }
 
 func run(t *testing.T, dir, name string, args ...string) {
