@@ -115,7 +115,11 @@ func composeProjectName(plan analyzer.Plan) string {
 }
 
 func imageName(plan analyzer.Plan) string {
-	sum := sha256.Sum256([]byte(plan.Source.Ref + analyzer.PlanHash(plan)))
+	planHash := plan.PlanHash
+	if planHash == "" {
+		planHash = analyzer.StablePlanHash(plan)
+	}
+	sum := sha256.Sum256([]byte(plan.Source.Ref + planHash))
 	tag := hex.EncodeToString(sum[:])[:12]
 	return filepath.ToSlash("oneclick/" + plan.App.Name + ":" + tag)
 }
