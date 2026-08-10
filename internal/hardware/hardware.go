@@ -70,7 +70,7 @@ func Check(plan analyzer.Plan, path string) Result {
 	}
 	if plan.Requirements.GPURequired && !h.NVIDIA {
 		r.Fits = false
-		r.Problems = append(r.Problems, "NVIDIA GPU required by detected CUDA/vLLM signals but nvidia-smi did not report one")
+		r.Problems = append(r.Problems, "NVIDIA GPU required by explicit CUDA/NVIDIA repository signals but nvidia-smi did not report one")
 	}
 	if plan.Runtime.Deployable && !h.Docker {
 		r.Fits = false
