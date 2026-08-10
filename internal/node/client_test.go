@@ -18,8 +18,12 @@ func TestEnrollAndSignedHeartbeat(t *testing.T) {
 		switch r.URL.Path {
 		case "/v1/nodes/enroll":
 			var in EnrollmentRequest
-			if err := json.NewDecoder(r.Body).Decode(&in); err != nil { t.Fatal(err) }
-			if in.EnrollmentToken != "enroll-once" || in.NodePublicKey == "" { t.Fatal("bad enrollment body") }
+			if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+				t.Fatal(err)
+			}
+			if in.EnrollmentToken != "enroll-once" || in.NodePublicKey == "" {
+				t.Fatal("bad enrollment body")
+			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusCreated)
 			_ = json.NewEncoder(w).Encode(EnrollmentResponse{NodeID: "node_1", ControlPublicKey: rawB64.EncodeToString(controlPub)})
@@ -33,12 +37,20 @@ func TestEnrollAndSignedHeartbeat(t *testing.T) {
 	defer srv.Close()
 	cfg := Config{ControlURL: srv.URL, StateDir: t.TempDir(), EnrollmentToken: "enroll-once", HTTPTimeout: time.Second, AllowHTTP: true}
 	id, _, err := LoadOrCreateIdentity(cfg.StateDir)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	st, err := Enroll(context.Background(), cfg, id)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	id.State = st
 	c := NewControlClient(cfg, id)
 	c.Client = srv.Client()
-	if err := c.Heartbeat(context.Background()); err != nil { t.Fatal(err) }
-	if !heartbeatSigned { t.Fatal("heartbeat was not signed") }
+	if err := c.Heartbeat(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !heartbeatSigned {
+		t.Fatal("heartbeat was not signed")
+	}
 }
