@@ -33,11 +33,18 @@ Other detected runtimes generate a deployment plan but fail closed at execution 
 - Secrets are detected by **name only** from `.env.example`; secret values are never read into the plan.
 - Deployment requires an explicit `--yes` confirmation flag.
 - Docker/Compose commands are printed before execution.
+- Managed execution may pin the canonical source ref, exact revision, and approved `plan_hash`; a mismatch fails before Docker runs.
 
 ## Build
 
 ```bash
 go build -o oneclick ./cmd/oneclick
+```
+
+With the node slice:
+
+```bash
+go build -o oneclick-node ./cmd/oneclick-node
 ```
 
 ## Analyze
@@ -92,6 +99,8 @@ For a Dockerfile with one detected `EXPOSE` port, `--port` changes the host-side
 
 `deploy` runs only when the repository has a supported Docker execution path. It does not execute arbitrary scripts from `package.json`, `Makefile`, or repository documentation.
 
+Docker Compose receives an additional trust gate before execution. OneClick rejects known host-access/elevation surfaces and renders a canonical Compose model before `up`; see [`docs/security.md`](docs/security.md) for the exact V0.1 policy.
+
 ## OneClick manifest
 
 `analyze` emits the normalized fields described by [`schema/oneclick.schema.json`](schema/oneclick.schema.json), including a deterministic `plan_hash`. Local Git repositories also report whether the working tree is dirty; `deploy` refuses dirty Git trees so a `HEAD` SHA cannot be mistaken for the exact source being executed. Repositories may later carry a hand-authored `oneclick.json`; V0.1 treats generated analysis as the source of truth and does not yet consume overrides.
@@ -100,8 +109,28 @@ For a Dockerfile with one detected `EXPOSE` port, `--port` changes the host-side
 
 This repository is also an Agent Plugins 1.0.0 skills package. The portable plugin contains skills only; it deliberately carries no credentials. Agent Plugins v1 keeps authorization client-managed.
 
+## OneClick Node
+
+`oneclick-node` is the optional managed-execution side of the open project. It is deliberately **outbound-only**:
+
+1. generate a local Ed25519 node identity;
+2. enroll once with a DeployLocal-compatible control plane over HTTPS;
+3. long-poll for short-lived signed deployment commands;
+4. reserve each command ID durably before execution;
+5. request a short-lived, repository-scoped GitHub source credential;
+6. download only the signed exact commit SHA;
+7. independently verify the approved `plan_hash` through the local OneClick CLI;
+8. preflight and deploy locally;
+9. cache and report a sanitized result without forwarding build logs.
+
+The node exposes no HTTP listener and requires no inbound SSH. A repeated command ID is not re-executed; a previously cached result is resent instead.
+
+See [`docs/node-protocol.md`](docs/node-protocol.md) and [`packaging/systemd/README.md`](packaging/systemd/README.md).
+
 ## DeployLocal relationship
 
-OneClick is the open engine. DeployLocal is intended to provide the commercial control plane around it: GitHub App installation, node enrollment, remote deployment orchestration, managed monitoring, backup, hardware fit/quoting, and support.
+OneClick and OneClick Node are the open execution layer. DeployLocal is the commercial control plane around them: GitHub App installation handling, enrollment-token issuance, repository credential minting, command signing, approvals, job orchestration, monitoring, backup, hardware fit/quoting, and support.
+
+Those commercial services are intentionally not implemented in this public repository.
 
 See [`docs/architecture.md`](docs/architecture.md) and [`docs/security.md`](docs/security.md).
