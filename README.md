@@ -72,7 +72,7 @@ Machine-readable JSON:
 ./oneclick preflight .
 ```
 
-The preflight reports host CPU, RAM, disk, architecture, Docker availability, and NVIDIA GPU/VRAM when `nvidia-smi` is available. V0.1 intentionally does not invent precise GPU requirements from source code; it reports GPU signals and warnings.
+The preflight reports host CPU, RAM, disk, architecture, Docker availability, and NVIDIA GPU/VRAM when `nvidia-smi` is available. V0.1 intentionally does not invent precise GPU requirements from source code; it reports GPU signals and warnings. CPU, RAM, and disk requirements are heuristic planning values derived from repository signals, not benchmarked sizing.
 
 ## Deploy
 
@@ -87,6 +87,8 @@ Dockerfile:
 ```bash
 ./oneclick deploy . --yes --port=3000
 ```
+
+For a Dockerfile with one detected `EXPOSE` port, `--port` changes the host-side port while preserving the detected container port.
 
 `deploy` runs only when the repository has a supported Docker execution path. It does not execute arbitrary scripts from `package.json`, `Makefile`, or repository documentation.
 
