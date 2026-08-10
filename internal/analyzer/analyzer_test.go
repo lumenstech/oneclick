@@ -27,18 +27,30 @@ func TestAnalyzeComposeNode(t *testing.T) {
 	}
 }
 
-func TestAnalyzeVLLMRequiresGPU(t *testing.T) {
+func TestVLLMDoesNotInventGPURequirement(t *testing.T) {
 	dir := t.TempDir()
 	mustWrite(t, filepath.Join(dir, "Dockerfile"), "FROM vllm/vllm-openai:latest\nEXPOSE 8000\n")
 	p, err := Analyze(dir, dir, "local", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !p.Requirements.GPURequired {
-		t.Fatal("expected GPU requirement")
+	if p.Requirements.GPURequired {
+		t.Fatal("vLLM alone must not prove an NVIDIA GPU requirement")
 	}
 	if p.Runtime.Executor != "docker" {
 		t.Fatalf("unexpected executor: %s", p.Runtime.Executor)
+	}
+}
+
+func TestCUDASignalRequiresGPU(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "Dockerfile"), "FROM nvidia/cuda:12.8.0-runtime-ubuntu24.04\n")
+	p, err := Analyze(dir, dir, "local", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !p.Requirements.GPURequired {
+		t.Fatal("expected explicit CUDA signal to require NVIDIA GPU")
 	}
 }
 
