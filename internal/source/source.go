@@ -13,6 +13,7 @@ type Checkout struct {
 	Ref      string
 	Type     string
 	Revision string
+	Dirty    bool
 	cleanup  func()
 }
 
@@ -28,7 +29,8 @@ func Prepare(input string) (Checkout, error) {
 		if err != nil {
 			return Checkout{}, err
 		}
-		return Checkout{Path: abs, Ref: abs, Type: "local", Revision: revision(abs)}, nil
+		rev, dirty := gitState(abs)
+		return Checkout{Path: abs, Ref: abs, Type: "local", Revision: rev, Dirty: dirty}, nil
 	}
 
 	if strings.HasPrefix(input, "https://github.com/") || strings.HasPrefix(input, "git@github.com:") {
@@ -43,16 +45,23 @@ func Prepare(input string) (Checkout, error) {
 			_ = os.RemoveAll(tmp)
 			return Checkout{}, fmt.Errorf("git clone failed: %w: %s", err, strings.TrimSpace(string(out)))
 		}
-		return Checkout{Path: tmp, Ref: input, Type: "github", Revision: revision(tmp), cleanup: func() { _ = os.RemoveAll(tmp) }}, nil
+		rev, _ := gitState(tmp)
+		return Checkout{Path: tmp, Ref: input, Type: "github", Revision: rev, Dirty: false, cleanup: func() { _ = os.RemoveAll(tmp) }}, nil
 	}
 	return Checkout{}, fmt.Errorf("source must be a local directory or GitHub repository URL")
 }
 
-func revision(path string) string {
+func gitState(path string) (string, bool) {
 	cmd := exec.Command("git", "-C", path, "rev-parse", "HEAD")
 	out, err := cmd.Output()
 	if err != nil {
-		return ""
+		return "", false
 	}
-	return strings.TrimSpace(string(out))
+	rev := strings.TrimSpace(string(out))
+	status := exec.Command("git", "-C", path, "status", "--porcelain", "--untracked-files=normal")
+	statusOut, err := status.Output()
+	if err != nil {
+		return rev, false
+	}
+	return rev, strings.TrimSpace(string(statusOut)) != ""
 }
