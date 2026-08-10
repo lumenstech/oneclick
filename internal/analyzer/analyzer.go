@@ -16,6 +16,7 @@ import (
 
 type Plan struct {
 	Version      int          `json:"version"`
+	PlanHash     string       `json:"plan_hash"`
 	App          App          `json:"app"`
 	Source       Source       `json:"source"`
 	Runtime      Runtime      `json:"runtime"`
@@ -37,6 +38,7 @@ type Source struct {
 	Type     string `json:"type"`
 	Ref      string `json:"ref"`
 	Revision string `json:"revision,omitempty"`
+	Dirty    bool   `json:"dirty,omitempty"`
 }
 
 type Runtime struct {
@@ -70,7 +72,7 @@ type Deployment struct {
 var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 var exposeRE = regexp.MustCompile(`(?i)^\s*EXPOSE\s+([0-9]+)`)
 
-func Analyze(root, sourceRef, sourceType, revision string) (Plan, error) {
+func Analyze(root, sourceRef, sourceType, revision string, dirty bool) (Plan, error) {
 	info, err := os.Stat(root)
 	if err != nil {
 		return Plan{}, err
@@ -82,7 +84,7 @@ func Analyze(root, sourceRef, sourceType, revision string) (Plan, error) {
 	plan := Plan{
 		Version:      1,
 		App:          App{Name: sourceName(root, sourceRef, sourceType)},
-		Source:       Source{Type: sourceType, Ref: sourceRef, Revision: revision},
+		Source:       Source{Type: sourceType, Ref: sourceRef, Revision: revision, Dirty: dirty},
 		Requirements: Requirements{CPUCoresMin: 2, MemoryMBMin: 2048, DiskMBMin: 2048},
 		Deployment:   Deployment{RollbackSupported: false},
 	}
@@ -160,8 +162,12 @@ func Analyze(root, sourceRef, sourceType, revision string) (Plan, error) {
 	plan.Secrets = detectSecretNames(root)
 	plan.Services = detectServices(root, runtimes)
 	plan.Warnings = append(plan.Warnings, "hardware requirements are V0.1 heuristics derived from repository signals, not benchmarked sizing")
+	if dirty {
+		plan.Warnings = append(plan.Warnings, "local Git working tree has uncommitted changes; HEAD revision does not bind the analyzed working-tree contents")
+	}
 	plan.Evidence = uniqueSorted(plan.Evidence)
 	plan.Warnings = uniqueSorted(plan.Warnings)
+	plan.PlanHash = PlanHash(plan)
 	return plan, nil
 }
 
@@ -225,7 +231,6 @@ func detectPorts(root string) []int {
 			}
 		}
 	}
-	// Conservative text scan for common compose port mappings.
 	for _, name := range []string{"compose.yaml", "compose.yml", "docker-compose.yml", "docker-compose.yaml"} {
 		b, err := os.ReadFile(filepath.Join(root, name))
 		if err != nil {
@@ -382,6 +387,7 @@ func max(a, b int) int {
 }
 
 func PlanHash(p Plan) string {
+	p.PlanHash = ""
 	b, _ := json.Marshal(p)
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])
