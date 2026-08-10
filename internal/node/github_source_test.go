@@ -20,8 +20,12 @@ func tarball(t *testing.T, entries map[string]string) []byte {
 	tw := tar.NewWriter(gz)
 	for name, body := range entries {
 		h := &tar.Header{Name: "prefix/" + name, Mode: 0o644, Size: int64(len(body)), Typeflag: tar.TypeReg}
-		if err := tw.WriteHeader(h); err != nil { t.Fatal(err) }
-		if _, err := tw.Write([]byte(body)); err != nil { t.Fatal(err) }
+		if err := tw.WriteHeader(h); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tw.Write([]byte(body)); err != nil {
+			t.Fatal(err)
+		}
 	}
 	_ = tw.Close()
 	_ = gz.Close()
@@ -42,10 +46,18 @@ func TestGitHubFetcherUsesHeaderAndExactCommit(t *testing.T) {
 	g.APIBase = srv.URL
 	dest := t.TempDir()
 	sha := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-	if err := g.Fetch(context.Background(), "owner/repo", sha, "opaque-token", dest); err != nil { t.Fatal(err) }
-	if gotAuth != "Bearer opaque-token" { t.Fatalf("token not sent as header: %q", gotAuth) }
-	if gotPath != "/repos/owner/repo/tarball/"+sha { t.Fatalf("unexpected path %q", gotPath) }
-	if _, err := os.Stat(filepath.Join(dest, "Dockerfile")); err != nil { t.Fatal(err) }
+	if err := g.Fetch(context.Background(), "owner/repo", sha, "opaque-token", dest); err != nil {
+		t.Fatal(err)
+	}
+	if gotAuth != "Bearer opaque-token" {
+		t.Fatalf("token not sent as header: %q", gotAuth)
+	}
+	if gotPath != "/repos/owner/repo/tarball/"+sha {
+		t.Fatalf("unexpected path %q", gotPath)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "Dockerfile")); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestGitHubFetcherRejectsLFS(t *testing.T) {
@@ -54,7 +66,9 @@ func TestGitHubFetcherRejectsLFS(t *testing.T) {
 	defer srv.Close()
 	g := NewGitHubFetcher(srv.Client())
 	g.APIBase = srv.URL
-	if err := g.Fetch(context.Background(), "owner/repo", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "t", t.TempDir()); err == nil { t.Fatal("expected LFS rejection") }
+	if err := g.Fetch(context.Background(), "owner/repo", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "t", t.TempDir()); err == nil {
+		t.Fatal("expected LFS rejection")
+	}
 }
 
 func TestGitHubFetcherDoesNotForwardTokenAcrossArchiveRedirect(t *testing.T) {
@@ -71,11 +85,18 @@ func TestGitHubFetcherDoesNotForwardTokenAcrossArchiveRedirect(t *testing.T) {
 		http.Redirect(w, r, download.URL+"/temporary-archive", http.StatusFound)
 	}))
 	defer api.Close()
+
 	g := NewGitHubFetcher(api.Client())
 	g.APIBase = api.URL
-	if err := g.Fetch(context.Background(), "owner/repo", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "opaque-install-token", t.TempDir()); err != nil { t.Fatal(err) }
-	if apiAuth != "Bearer opaque-install-token" { t.Fatalf("API request missing token: %q", apiAuth) }
-	if downloadAuth != "" { t.Fatalf("installation token leaked to archive redirect: %q", downloadAuth) }
+	if err := g.Fetch(context.Background(), "owner/repo", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "opaque-install-token", t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	if apiAuth != "Bearer opaque-install-token" {
+		t.Fatalf("API request missing token: %q", apiAuth)
+	}
+	if downloadAuth != "" {
+		t.Fatalf("installation token leaked to archive redirect: %q", downloadAuth)
+	}
 }
 
 func TestGitHubFetcherRejectsUnexpectedRedirectHost(t *testing.T) {
@@ -87,5 +108,7 @@ func TestGitHubFetcherRejectsUnexpectedRedirectHost(t *testing.T) {
 	g := NewGitHubFetcher(api.Client())
 	g.APIBase = api.URL
 	err := g.Fetch(context.Background(), "owner/repo", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "opaque-install-token", t.TempDir())
-	if err == nil || !strings.Contains(err.Error(), "redirect rejected") { t.Fatalf("expected redirect rejection, got %v", err) }
+	if err == nil || !strings.Contains(err.Error(), "redirect rejected") {
+		t.Fatalf("expected redirect rejection, got %v", err)
+	}
 }
