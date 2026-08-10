@@ -83,6 +83,9 @@ func deployCmd(args []string) {
 	}
 	c, plan := preparePlan(src)
 	defer c.Close()
+	if c.Dirty {
+		fatal(fmt.Errorf("refusing to deploy a dirty local Git working tree; commit or stash changes before deployment"))
+	}
 	pre := hardware.Check(plan, c.Path)
 	if !pre.Fits {
 		printJSON(pre)
@@ -98,7 +101,7 @@ func preparePlan(src string) (source.Checkout, analyzer.Plan) {
 	if err != nil {
 		fatal(err)
 	}
-	plan, err := analyzer.Analyze(c.Path, c.Ref, c.Type, c.Revision)
+	plan, err := analyzer.Analyze(c.Path, c.Ref, c.Type, c.Revision, c.Dirty)
 	if err != nil {
 		c.Close()
 		fatal(err)
@@ -123,6 +126,7 @@ func printJSON(v any) {
 
 func printPlanYAML(p analyzer.Plan) {
 	fmt.Printf("version: %d\n", p.Version)
+	fmt.Printf("plan_hash: %s\n", q(p.PlanHash))
 	fmt.Printf("app:\n  name: %s\n", q(p.App.Name))
 	fmt.Printf("source:\n  type: %s\n  ref: %s\n", q(p.Source.Type), q(p.Source.Ref))
 	if p.Source.Revision != "" {
@@ -142,7 +146,7 @@ func printPlanYAML(p analyzer.Plan) {
 		fmt.Printf("  - %s\n", q(s))
 	}
 	fmt.Printf("deployment:\n  rollback_supported: %t\n", p.Deployment.RollbackSupported)
-	fmt.Printf("plan_hash: %s\n", analyzer.PlanHash(p))
+
 	if len(p.Warnings) > 0 {
 		fmt.Println("warnings:")
 		for _, s := range p.Warnings {
